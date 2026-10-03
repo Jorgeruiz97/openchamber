@@ -239,6 +239,7 @@ describe('OpenChamber foreground update route', () => {
   it('leaves the update installable for a macOS launchd foreground server', async () => {
     const launchd = createApp({
       platform: 'darwin',
+      environment: { XPC_SERVICE_NAME: 'dev.openchamber.web' },
       storedOptions: { launchMode: 'foreground' },
       plistExists: true,
     });
@@ -332,9 +333,24 @@ describe('OpenChamber foreground update route', () => {
     expect(childProcess.spawn).not.toHaveBeenCalled();
   });
 
+  it('rejects foreground update on macOS when the plist exists but the server was not started by launchd', async () => {
+    const { app } = createApp({
+      platform: 'darwin',
+      storedOptions: { launchMode: 'foreground' },
+      plistExists: true,
+    });
+
+    await request(app)
+      .post('/api/openchamber/update-install')
+      .expect(409);
+
+    expect(childProcess.spawn).not.toHaveBeenCalled();
+  });
+
   it('allows foreground update on macOS when launchd plist exists and invokes launchd restart command', async () => {
     const { app } = createApp({
       platform: 'darwin',
+      environment: { XPC_SERVICE_NAME: 'dev.openchamber.web' },
       storedOptions: { launchMode: 'foreground' },
       plistExists: true,
     });
@@ -358,7 +374,7 @@ describe('OpenChamber foreground update route', () => {
       [
         '-c',
         expect.stringContaining(
-          "launchctl kickstart -k gui/$(id -u)/dev.openchamber.web || (launchctl unload '/home/test/Library/LaunchAgents/dev.openchamber.web.plist' && launchctl load '/home/test/Library/LaunchAgents/dev.openchamber.web.plist')"
+          "launchctl kickstart -k gui/$(id -u)/dev.openchamber.web || launchctl bootstrap gui/$(id -u) '/home/test/Library/LaunchAgents/dev.openchamber.web.plist'"
         ),
       ],
       expect.objectContaining({

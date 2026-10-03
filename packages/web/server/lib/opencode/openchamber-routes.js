@@ -99,7 +99,16 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
     const systemdServiceUnit = isForegroundService && !isDarwin ? resolveSystemdServiceUnit(process.env) : null;
     const osModule = os || (await import('os'));
     const launchdPlistPath = isDarwin ? resolveLaunchdPlistPath(path, osModule) : null;
-    const isLaunchdService = Boolean(isDarwin && isForegroundService && launchdPlistPath && fs.existsSync(launchdPlistPath));
+    // launchd sets XPC_SERVICE_NAME to the job label, so a manual
+    // `serve --foreground` on a Mac that also has startup enabled is not
+    // mistaken for the LaunchAgent.
+    const isLaunchdService = Boolean(
+      isDarwin
+      && isForegroundService
+      && process.env?.XPC_SERVICE_NAME === LAUNCHD_SERVICE_ID
+      && launchdPlistPath
+      && fs.existsSync(launchdPlistPath),
+    );
     return { storedOptions, launchMode, isForegroundService, systemdServiceUnit, isLaunchdService, launchdPlistPath };
   };
 
@@ -323,7 +332,7 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
       let restartCmd = '';
       if (isLaunchdService) {
         const quotedPlistPath = quotePosixShell(launchdPlistPath);
-        restartCmd = `launchctl kickstart -k gui/$(id -u)/${LAUNCHD_SERVICE_ID} || (launchctl unload ${quotedPlistPath} && launchctl load ${quotedPlistPath})`;
+        restartCmd = `launchctl kickstart -k gui/$(id -u)/${LAUNCHD_SERVICE_ID} || launchctl bootstrap gui/$(id -u) ${quotedPlistPath}`;
       } else {
         const cliPath = path.resolve(__dirname, '..', 'bin', 'cli.js');
         const restartParts = [
