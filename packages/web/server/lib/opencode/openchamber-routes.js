@@ -1,3 +1,5 @@
+import { publicEnterprisePolicy } from '../enterprise-mode.js';
+
 const SYSTEMD_SERVICE_UNIT_PATTERN = /^[A-Za-z0-9:_.@-]+\.service$/;
 
 function resolveSystemdServiceUnit(environment) {
@@ -100,6 +102,12 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
     const isLaunchdService = Boolean(isDarwin && isForegroundService && launchdPlistPath && fs.existsSync(launchdPlistPath));
     return { storedOptions, launchMode, isForegroundService, systemdServiceUnit, isLaunchdService, launchdPlistPath };
   };
+
+  // Whether an administrator turned on enterprise mode, and by which source.
+  // Pinned endpoints and keys never leave the server.
+  app.get('/api/openchamber/enterprise-policy', (_req, res) => {
+    res.json(publicEnterprisePolicy());
+  });
 
   app.get('/api/openchamber/update-check', async (req, res) => {
     try {
@@ -221,7 +229,7 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
 
       const pmDetails = detectPackageManagerDetails();
       const pm = pmDetails.packageManager;
-      const updateCmd = getUpdateCommand(pm);
+      const updateCmd = getUpdateCommand(pm, { targetVersion: updateInfo.version });
       const isContainer =
         fs.existsSync('/.dockerenv') ||
         Boolean(process.env.CONTAINER) ||
